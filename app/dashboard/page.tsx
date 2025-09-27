@@ -5,7 +5,8 @@ import { Header } from "@/components/layout/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Inbox, FileText, Calculator, TrendingUp, Clock, CheckCircle, AlertCircle } from "lucide-react"
+import { Inbox, FileText, Calculator, TrendingUp, Clock, CheckCircle, Plus } from "lucide-react"
+import Link from "next/link"
 
 export default async function Dashboard() {
   const supabase = await createClient()
@@ -30,6 +31,35 @@ export default async function Dashboard() {
     profile?.first_name && profile?.last_name
       ? `${profile.first_name} ${profile.last_name}`
       : user.email?.split("@")[0] || "Benutzer"
+
+  // Get projects/jobs count
+  const { count: projectsCount } = await supabase
+    .from(isHandwerker ? "jobs" : "projects")
+    .select("*", { count: "exact", head: true })
+    .eq(isHandwerker ? "status" : "kunde_id", isHandwerker ? "open" : user.id)
+
+  // Get offers count
+  const { count: offersCount } = await supabase
+    .from("offers")
+    .select("*", { count: "exact", head: true })
+    .eq(isHandwerker ? "handwerker_id" : "kunde_id", user.id)
+
+  // Get recent activities
+  const { data: recentActivities } = await supabase
+    .from("activities")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(3)
+
+  // Get pending tasks
+  const { data: pendingTasks } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("status", "pending")
+    .order("due_date", { ascending: true })
+    .limit(3)
 
   return (
     <div className="flex h-screen bg-background">
@@ -61,8 +91,10 @@ export default async function Dashboard() {
                 <Inbox className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">12</div>
-                <p className="text-xs text-muted-foreground">+3 seit gestern</p>
+                <div className="text-2xl font-bold">{projectsCount || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  {projectsCount === 0 ? "Noch keine Projekte" : "Aktuelle Projekte"}
+                </p>
               </CardContent>
             </Card>
 
@@ -74,8 +106,8 @@ export default async function Dashboard() {
                 <Calculator className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">8</div>
-                <p className="text-xs text-muted-foreground">Diese Woche</p>
+                <div className="text-2xl font-bold">{offersCount || 0}</div>
+                <p className="text-xs text-muted-foreground">{offersCount === 0 ? "Noch keine Angebote" : "Gesamt"}</p>
               </CardContent>
             </Card>
 
@@ -87,8 +119,8 @@ export default async function Dashboard() {
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">€{isHandwerker ? "45.230" : "3.450"}</div>
-                <p className="text-xs text-muted-foreground">+12% zum Vormonat</p>
+                <div className="text-2xl font-bold">€0</div>
+                <p className="text-xs text-muted-foreground">Noch keine Daten</p>
               </CardContent>
             </Card>
 
@@ -98,9 +130,9 @@ export default async function Dashboard() {
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{isHandwerker ? "68%" : "4.8"}</div>
+                <div className="text-2xl font-bold">{isHandwerker ? "-" : "-"}</div>
                 <p className="text-xs text-muted-foreground">
-                  {isHandwerker ? "Angebote → Aufträge" : "⭐ Durchschnitt"}
+                  {isHandwerker ? "Noch keine Aufträge" : "Noch keine Bewertungen"}
                 </p>
               </CardContent>
             </Card>
@@ -113,41 +145,34 @@ export default async function Dashboard() {
                 <CardTitle>Aktuelle Aktivitäten</CardTitle>
                 <CardDescription>Die neuesten Ereignisse in Ihren Projekten</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-2 h-2 bg-accent rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      {isHandwerker ? "Neue Anfrage von Müller GmbH" : "Angebot von Schmidt Elektrik erhalten"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">vor 2 Stunden</p>
+              <CardContent>
+                {recentActivities && recentActivities.length > 0 ? (
+                  <div className="space-y-4">
+                    {recentActivities.map((activity, index) => (
+                      <div key={activity.id} className="flex items-center gap-4">
+                        <div className="w-2 h-2 bg-accent rounded-full"></div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{activity.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(activity.created_at).toLocaleDateString("de-DE")}
+                          </p>
+                        </div>
+                        <Badge variant="secondary">{activity.type}</Badge>
+                      </div>
+                    ))}
                   </div>
-                  <Badge variant="secondary">Neu</Badge>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      {isHandwerker ? "Angebot #2024-015 versendet" : "Projekt #2024-015 gestartet"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">vor 4 Stunden</p>
+                ) : (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-sm text-muted-foreground mb-4">Noch keine Aktivitäten vorhanden</p>
+                    <Button asChild>
+                      <Link href={isHandwerker ? "/jobs" : "/projects"}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        {isHandwerker ? "Aufträge suchen" : "Projekt erstellen"}
+                      </Link>
+                    </Button>
                   </div>
-                  <Badge variant="outline">{isHandwerker ? "Versendet" : "In Bearbeitung"}</Badge>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      {isHandwerker
-                        ? "Auftrag von Schmidt & Co. abgeschlossen"
-                        : "Bewertung für Weber Sanitär abgegeben"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">gestern</p>
-                  </div>
-                  <Badge className="bg-green-100 text-green-800">Abgeschlossen</Badge>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -156,45 +181,33 @@ export default async function Dashboard() {
                 <CardTitle>Anstehende Aufgaben</CardTitle>
                 <CardDescription>Was heute noch zu erledigen ist</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      {isHandwerker ? "Follow-up für Angebot #2024-012" : "Handwerker für Badezimmer finden"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Fällig heute</p>
+              <CardContent>
+                {pendingTasks && pendingTasks.length > 0 ? (
+                  <div className="space-y-4">
+                    {pendingTasks.map((task) => (
+                      <div key={task.id} className="flex items-center gap-4">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{task.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Fällig: {new Date(task.due_date).toLocaleDateString("de-DE")}
+                          </p>
+                        </div>
+                        <Button size="sm" variant="outline">
+                          Erledigen
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                  <Button size="sm" variant="outline">
-                    Erledigen
-                  </Button>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      {isHandwerker ? "Kostenvoranschlag für Neubau" : "Projektdetails vervollständigen"}
+                ) : (
+                  <div className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-sm text-muted-foreground mb-4">Keine offenen Aufgaben</p>
+                    <p className="text-xs text-muted-foreground">
+                      Alle Aufgaben sind erledigt oder es wurden noch keine erstellt.
                     </p>
-                    <p className="text-xs text-muted-foreground">Fällig morgen</p>
                   </div>
-                  <Button size="sm" variant="outline">
-                    Starten
-                  </Button>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <AlertCircle className="h-4 w-4 text-orange-500" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      {isHandwerker ? "Materialbestellung prüfen" : "Angebot bewerten"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Überfällig</p>
-                  </div>
-                  <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
-                    Dringend
-                  </Button>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
