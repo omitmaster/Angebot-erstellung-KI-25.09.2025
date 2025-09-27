@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 import {
   Settings,
   Building2,
@@ -27,7 +28,12 @@ import {
   Phone,
   Save,
   Upload,
+  FileText,
+  Eye,
+  Download,
+  Trash2,
 } from "lucide-react"
+import { Microsoft365Setup } from "@/components/settings/microsoft365-setup"
 
 interface CompanySettings {
   name: string
@@ -71,6 +77,30 @@ interface SystemSettings {
   dataRetention: number
 }
 
+const initialBrandingSettings = {
+  isActive: true,
+  companyName: "Handwerk GmbH",
+  companyAddress: "Musterstraße 123\n12345 Musterstadt",
+  companyPhone: "+49 40 123456789",
+  companyEmail: "info@handwerk-gmbh.de",
+  companyWebsite: "www.handwerk-gmbh.de",
+  taxNumber: "123/456/78901",
+  vatNumber: "DE123456789",
+  logoUrl: null,
+  letterheadUrl: null,
+  logoPosition: "top-left",
+  primaryColor: "#1e40af",
+  secondaryColor: "#10b981",
+  textColor: "#1f2937",
+  fontFamily: "Arial",
+  fontSizeBody: 11,
+  fontSizeHeading: 16,
+  marginTopMm: 25,
+  marginBottomMm: 20,
+  marginLeftMm: 20,
+  marginRightMm: 20,
+}
+
 export default function SettingsPage() {
   const [companySettings, setCompanySettings] = useState<CompanySettings>({
     name: "Handwerk GmbH",
@@ -112,6 +142,8 @@ export default function SettingsPage() {
     dataRetention: 7,
   })
 
+  const [brandingSettings, setBrandingSettings] = useState(initialBrandingSettings)
+
   const handleSaveSettings = (section: string) => {
     console.log("[v0] Saving settings for section:", section)
     // Mock save operation
@@ -126,6 +158,16 @@ export default function SettingsPage() {
       console.log("[v0] Uploading logo:", file.name)
       const logoUrl = URL.createObjectURL(file)
       setCompanySettings({ ...companySettings, logo: logoUrl })
+      setBrandingSettings({ ...brandingSettings, logoUrl })
+    }
+  }
+
+  const handleLetterheadUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      console.log("[v0] Uploading letterhead:", file.name)
+      const letterheadUrl = URL.createObjectURL(file)
+      setBrandingSettings({ ...brandingSettings, letterheadUrl })
     }
   }
 
@@ -155,10 +197,14 @@ export default function SettingsPage() {
           </div>
 
           <Tabs defaultValue="company" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="company" className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
                 Unternehmen
+              </TabsTrigger>
+              <TabsTrigger value="branding" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Briefkopf
               </TabsTrigger>
               <TabsTrigger value="user" className="flex items-center gap-2">
                 <User className="h-4 w-4" />
@@ -171,6 +217,10 @@ export default function SettingsPage() {
               <TabsTrigger value="system" className="flex items-center gap-2">
                 <Palette className="h-4 w-4" />
                 System
+              </TabsTrigger>
+              <TabsTrigger value="microsoft365" className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Microsoft 365
               </TabsTrigger>
               <TabsTrigger value="integrations" className="flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
@@ -291,6 +341,446 @@ export default function SettingsPage() {
                     <Button onClick={() => handleSaveSettings("company")}>
                       <Save className="h-4 w-4 mr-2" />
                       Speichern
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="branding" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Briefkopf & Layout
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Gestalten Sie professionelle Angebote und Dokumente mit Ihrem Corporate Design
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Status und Aktivierung */}
+                  <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                    <div>
+                      <h3 className="font-medium">Briefkopf Status</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {brandingSettings.isActive ? "Aktiv - wird in allen Dokumenten verwendet" : "Inaktiv"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {brandingSettings.isActive && <Badge variant="default">Aktiv</Badge>}
+                      <Switch
+                        checked={brandingSettings.isActive}
+                        onCheckedChange={(checked) => setBrandingSettings({ ...brandingSettings, isActive: checked })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Firmeninformationen für Briefkopf */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Firmeninformationen</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="branding-company-name">Firmenname</Label>
+                          <Input
+                            id="branding-company-name"
+                            value={brandingSettings.companyName}
+                            onChange={(e) => setBrandingSettings({ ...brandingSettings, companyName: e.target.value })}
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="branding-address">Adresse</Label>
+                          <Textarea
+                            id="branding-address"
+                            value={brandingSettings.companyAddress}
+                            onChange={(e) =>
+                              setBrandingSettings({ ...brandingSettings, companyAddress: e.target.value })
+                            }
+                            rows={3}
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="branding-phone">Telefon</Label>
+                          <Input
+                            id="branding-phone"
+                            value={brandingSettings.companyPhone}
+                            onChange={(e) => setBrandingSettings({ ...brandingSettings, companyPhone: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="branding-email">E-Mail</Label>
+                          <Input
+                            id="branding-email"
+                            type="email"
+                            value={brandingSettings.companyEmail}
+                            onChange={(e) => setBrandingSettings({ ...brandingSettings, companyEmail: e.target.value })}
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="branding-website">Website</Label>
+                          <Input
+                            id="branding-website"
+                            value={brandingSettings.companyWebsite}
+                            onChange={(e) =>
+                              setBrandingSettings({ ...brandingSettings, companyWebsite: e.target.value })
+                            }
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label htmlFor="tax-number">Steuernummer</Label>
+                            <Input
+                              id="tax-number"
+                              value={brandingSettings.taxNumber}
+                              onChange={(e) => setBrandingSettings({ ...brandingSettings, taxNumber: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="vat-number">USt-IdNr.</Label>
+                            <Input
+                              id="vat-number"
+                              value={brandingSettings.vatNumber}
+                              onChange={(e) => setBrandingSettings({ ...brandingSettings, vatNumber: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Logo und Briefkopf Upload */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Logo & Briefkopf</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Firmenlogo</Label>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Empfohlen: PNG/SVG, transparent, max. 2MB
+                          </p>
+                          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+                            {brandingSettings.logoUrl ? (
+                              <div className="space-y-2">
+                                <img
+                                  src={brandingSettings.logoUrl || "/placeholder.svg"}
+                                  alt="Logo"
+                                  className="max-h-20 mx-auto object-contain"
+                                />
+                                <div className="flex justify-center gap-2">
+                                  <Button variant="outline" size="sm">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">Kein Logo hochgeladen</p>
+                              </div>
+                            )}
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            className="hidden"
+                            id="logo-upload-branding"
+                          />
+                          <Button variant="outline" className="w-full mt-2 bg-transparent" asChild>
+                            <label htmlFor="logo-upload-branding" className="cursor-pointer">
+                              <Upload className="h-4 w-4 mr-2" />
+                              Logo hochladen
+                            </label>
+                          </Button>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="logo-position">Logo Position</Label>
+                          <Select
+                            value={brandingSettings.logoPosition}
+                            onValueChange={(value) => setBrandingSettings({ ...brandingSettings, logoPosition: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="top-left">Oben Links</SelectItem>
+                              <SelectItem value="top-center">Oben Mitte</SelectItem>
+                              <SelectItem value="top-right">Oben Rechts</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Vollständiger Briefkopf</Label>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Optional: Kompletter Briefkopf als Bild (PDF, PNG, JPG)
+                          </p>
+                          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+                            {brandingSettings.letterheadUrl ? (
+                              <div className="space-y-2">
+                                <img
+                                  src={brandingSettings.letterheadUrl || "/placeholder.svg"}
+                                  alt="Briefkopf"
+                                  className="max-h-20 mx-auto object-contain"
+                                />
+                                <div className="flex justify-center gap-2">
+                                  <Button variant="outline" size="sm">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <FileText className="h-8 w-8 mx-auto text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">Kein Briefkopf hochgeladen</p>
+                              </div>
+                            )}
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={handleLetterheadUpload}
+                            className="hidden"
+                            id="letterhead-upload"
+                          />
+                          <Button variant="outline" className="w-full mt-2 bg-transparent" asChild>
+                            <label htmlFor="letterhead-upload" className="cursor-pointer">
+                              <Upload className="h-4 w-4 mr-2" />
+                              Briefkopf hochladen
+                            </label>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Design & Farben */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Design & Farben</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="primary-color">Primärfarbe</Label>
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            id="primary-color"
+                            type="color"
+                            value={brandingSettings.primaryColor}
+                            onChange={(e) => setBrandingSettings({ ...brandingSettings, primaryColor: e.target.value })}
+                            className="w-16 h-10 p-1 border rounded"
+                          />
+                          <Input
+                            value={brandingSettings.primaryColor}
+                            onChange={(e) => setBrandingSettings({ ...brandingSettings, primaryColor: e.target.value })}
+                            className="flex-1"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="secondary-color">Sekundärfarbe</Label>
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            id="secondary-color"
+                            type="color"
+                            value={brandingSettings.secondaryColor}
+                            onChange={(e) =>
+                              setBrandingSettings({ ...brandingSettings, secondaryColor: e.target.value })
+                            }
+                            className="w-16 h-10 p-1 border rounded"
+                          />
+                          <Input
+                            value={brandingSettings.secondaryColor}
+                            onChange={(e) =>
+                              setBrandingSettings({ ...brandingSettings, secondaryColor: e.target.value })
+                            }
+                            className="flex-1"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="text-color">Textfarbe</Label>
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            id="text-color"
+                            type="color"
+                            value={brandingSettings.textColor}
+                            onChange={(e) => setBrandingSettings({ ...brandingSettings, textColor: e.target.value })}
+                            className="w-16 h-10 p-1 border rounded"
+                          />
+                          <Input
+                            value={brandingSettings.textColor}
+                            onChange={(e) => setBrandingSettings({ ...brandingSettings, textColor: e.target.value })}
+                            className="flex-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Typografie */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Typografie</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="font-family">Schriftart</Label>
+                        <Select
+                          value={brandingSettings.fontFamily}
+                          onValueChange={(value) => setBrandingSettings({ ...brandingSettings, fontFamily: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Arial">Arial</SelectItem>
+                            <SelectItem value="Helvetica">Helvetica</SelectItem>
+                            <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+                            <SelectItem value="Calibri">Calibri</SelectItem>
+                            <SelectItem value="Open Sans">Open Sans</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="font-size-body">Fließtext (pt)</Label>
+                        <Input
+                          id="font-size-body"
+                          type="number"
+                          min="8"
+                          max="16"
+                          value={brandingSettings.fontSizeBody}
+                          onChange={(e) =>
+                            setBrandingSettings({ ...brandingSettings, fontSizeBody: Number(e.target.value) })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="font-size-heading">Überschriften (pt)</Label>
+                        <Input
+                          id="font-size-heading"
+                          type="number"
+                          min="12"
+                          max="24"
+                          value={brandingSettings.fontSizeHeading}
+                          onChange={(e) =>
+                            setBrandingSettings({ ...brandingSettings, fontSizeHeading: Number(e.target.value) })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Layout-Einstellungen */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Layout-Einstellungen</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <Label htmlFor="margin-top">Rand Oben (mm)</Label>
+                        <Input
+                          id="margin-top"
+                          type="number"
+                          min="10"
+                          max="50"
+                          value={brandingSettings.marginTopMm}
+                          onChange={(e) =>
+                            setBrandingSettings({ ...brandingSettings, marginTopMm: Number(e.target.value) })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="margin-bottom">Rand Unten (mm)</Label>
+                        <Input
+                          id="margin-bottom"
+                          type="number"
+                          min="10"
+                          max="50"
+                          value={brandingSettings.marginBottomMm}
+                          onChange={(e) =>
+                            setBrandingSettings({ ...brandingSettings, marginBottomMm: Number(e.target.value) })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="margin-left">Rand Links (mm)</Label>
+                        <Input
+                          id="margin-left"
+                          type="number"
+                          min="10"
+                          max="50"
+                          value={brandingSettings.marginLeftMm}
+                          onChange={(e) =>
+                            setBrandingSettings({ ...brandingSettings, marginLeftMm: Number(e.target.value) })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="margin-right">Rand Rechts (mm)</Label>
+                        <Input
+                          id="margin-right"
+                          type="number"
+                          min="10"
+                          max="50"
+                          value={brandingSettings.marginRightMm}
+                          onChange={(e) =>
+                            setBrandingSettings({ ...brandingSettings, marginRightMm: Number(e.target.value) })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Vorschau und Aktionen */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Vorschau & Test</h3>
+                    <div className="flex gap-2">
+                      <Button variant="outline">
+                        <Eye className="h-4 w-4 mr-2" />
+                        Vorschau anzeigen
+                      </Button>
+                      <Button variant="outline">
+                        <Download className="h-4 w-4 mr-2" />
+                        Test-PDF erstellen
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex justify-end">
+                    <Button onClick={() => handleSaveSettings("branding")}>
+                      <Save className="h-4 w-4 mr-2" />
+                      Briefkopf speichern
                     </Button>
                   </div>
                 </CardContent>
@@ -686,6 +1176,10 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="microsoft365" className="space-y-6">
+              <Microsoft365Setup />
             </TabsContent>
 
             <TabsContent value="integrations" className="space-y-6">

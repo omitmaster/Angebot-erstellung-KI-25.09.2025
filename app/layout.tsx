@@ -2,9 +2,12 @@ import type React from "react"
 import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
-import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
+import { AnalyticsProvider } from "@/components/monitoring/analytics-provider"
 import "./globals.css"
+
+const geistSans = GeistSans.variable
+const geistMono = GeistMono.variable
 
 export const metadata: Metadata = {
   title: "Angebots- & Prozessmeister",
@@ -14,14 +17,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
-    <html lang="de">
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <Suspense fallback={null}>{children}</Suspense>
-        <Analytics />
+    <html lang="de" className={`${geistSans} ${geistMono} antialiased`}>
+      <body>
+        <Suspense fallback={null}>
+          <AnalyticsProvider>{children}</AnalyticsProvider>
+        </Suspense>
       </body>
     </html>
   )

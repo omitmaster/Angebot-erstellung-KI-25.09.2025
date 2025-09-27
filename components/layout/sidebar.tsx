@@ -18,12 +18,18 @@ import {
   Menu,
   X,
   Building2,
+  Database,
+  MessageCircle,
+  Briefcase,
 } from "lucide-react"
 
 const navigation = [
-  { name: "Posteingang", href: "/inbox", icon: Inbox },
+  { name: "Dashboard", href: "/dashboard", icon: Inbox },
+  { name: "Aufträge", href: "/jobs", icon: Briefcase },
+  { name: "Nachrichten", href: "/messages", icon: MessageCircle },
   { name: "LV-Analyse", href: "/lv-analysis", icon: FileText },
   { name: "Angebots-Builder", href: "/offer-builder", icon: Calculator },
+  { name: "Preisdatenbank", href: "/price-database", icon: Database },
   { name: "Versand & Follow-up", href: "/follow-up", icon: Send },
   { name: "Verträge", href: "/contracts", icon: FileSignature },
   { name: "Material", href: "/materials", icon: Package },
