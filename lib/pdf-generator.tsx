@@ -423,3 +423,175 @@ export function generatePreviewURL(html: string): string {
   const blob = new Blob([html], { type: "text/html" })
   return URL.createObjectURL(blob)
 }
+
+// PDFGenerator object with required methods
+export const PDFGenerator = {
+  async generateOfferPDF(offerData: any): Promise<Blob> {
+    console.log("[v0] Generating PDF for offer:", offerData.offerNumber)
+
+    // Create default branding settings for now
+    const defaultBranding: BrandingSettings = {
+      isActive: true,
+      companyName: "Handwerk GmbH",
+      companyAddress: "Musterstraße 1\n12345 Musterstadt",
+      companyPhone: "+49 40 123456789",
+      companyEmail: "info@handwerk-gmbh.de",
+      companyWebsite: "www.handwerk-gmbh.de",
+      taxNumber: "123/456/78901",
+      vatNumber: "DE123456789",
+      logoPosition: "top-left" as const,
+      primaryColor: "#2563eb",
+      secondaryColor: "#64748b",
+      textColor: "#1e293b",
+      fontFamily: "Arial",
+      fontSizeBody: 10,
+      fontSizeHeading: 14,
+      marginTopMm: 20,
+      marginBottomMm: 20,
+      marginLeftMm: 20,
+      marginRightMm: 20,
+    }
+
+    // Convert the offer data to the expected format
+    const convertedOfferData: OfferData = {
+      offerNumber: offerData.offerNumber,
+      offerDate: offerData.date,
+      validUntil: offerData.validUntil,
+      customer: {
+        name: offerData.customer.name,
+        address: offerData.customer.address,
+        email: offerData.customer.email,
+        phone: offerData.customer.phone,
+      },
+      project: {
+        title: offerData.projectTitle,
+        description: offerData.textBlocks?.introduction || "Projektbeschreibung",
+        address: offerData.projectAddress,
+      },
+      positions: offerData.positions.map((pos: any, index: number) => ({
+        position: index + 1,
+        description: `${pos.title}\n${pos.description}`,
+        quantity: pos.quantity,
+        unit: pos.unit,
+        unitPrice: pos.unitPrice,
+        totalPrice: pos.totalPrice,
+      })),
+      subtotal: offerData.positions.reduce((sum: number, pos: any) => sum + pos.totalPrice, 0),
+      taxRate: 19,
+      taxAmount: offerData.positions.reduce((sum: number, pos: any) => sum + pos.totalPrice, 0) * 0.19,
+      total: offerData.total * 1.19, // Including tax
+      notes: offerData.textBlocks?.advantages ? [offerData.textBlocks.advantages] : undefined,
+      terms: offerData.textBlocks?.terms ? [offerData.textBlocks.terms] : undefined,
+    }
+
+    // Generate HTML and convert to PDF
+    const html = generateOfferHTML(convertedOfferData, defaultBranding)
+    const pdfBlob = await generatePDFFromHTML(html, `angebot-${offerData.offerNumber}.pdf`)
+
+    console.log("[v0] PDF generation completed")
+    return pdfBlob
+  },
+
+  async generateExcelExport(offerData: any): Promise<Blob> {
+    console.log("[v0] Generating Excel export for offer:", offerData.offerNumber)
+
+    // Create a simple CSV format for Excel compatibility
+    const csvContent = [
+      // Header row
+      ["Position", "Code", "Titel", "Beschreibung", "Menge", "Einheit", "Einzelpreis", "Gesamtpreis", "Kategorie"].join(
+        ";",
+      ),
+      // Data rows
+      ...offerData.positions.map((pos: any, index: number) =>
+        [
+          index + 1,
+          pos.code || "",
+          pos.title || "",
+          pos.description || "",
+          pos.quantity,
+          pos.unit,
+          pos.unitPrice.toFixed(2),
+          pos.totalPrice.toFixed(2),
+          pos.category || "",
+        ].join(";"),
+      ),
+    ].join("\n")
+
+    // Add BOM for proper UTF-8 encoding in Excel
+    const bom = "\uFEFF"
+    const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8" })
+
+    console.log("[v0] Excel export completed")
+    return blob
+  },
+
+  async generateGAEBExport(offerData: any): Promise<Blob> {
+    console.log("[v0] Generating GAEB XML export for offer:", offerData.offerNumber)
+
+    // Create a simplified GAEB XML structure
+    const gaebXml = `<?xml version="1.0" encoding="UTF-8"?>
+<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/200407">
+  <GAEBInfo>
+    <Version>3.2</Version>
+    <Date>${new Date().toISOString().split("T")[0]}</Date>
+    <ProgSystem>Handwerk App</ProgSystem>
+  </GAEBInfo>
+  <PrjInfo>
+    <ProjectID>${offerData.offerNumber}</ProjectID>
+    <Name>${offerData.projectTitle}</Name>
+    <Customer>${offerData.customer.name}</Customer>
+    <Date>${offerData.date}</Date>
+  </PrjInfo>
+  <Award>
+    <BoQ>
+      ${offerData.positions
+        .map(
+          (pos: any, index: number) => `
+      <Item>
+        <ItemNo>${pos.code || (index + 1).toString().padStart(3, "0")}</ItemNo>
+        <Description>
+          <CompleteText>
+            <DetailTxt>
+              <Text>${pos.title}</Text>
+            </DetailTxt>
+            <OutlineText>
+              <OutlineTxt>
+                <Text>${pos.description}</Text>
+              </OutlineTxt>
+            </OutlineText>
+          </CompleteText>
+        </Description>
+        <Qty>${pos.quantity}</Qty>
+        <QU>${pos.unit}</QU>
+        <UP>${pos.unitPrice.toFixed(2)}</UP>
+        <TotalPrice>${pos.totalPrice.toFixed(2)}</TotalPrice>
+      </Item>`,
+        )
+        .join("")}
+    </BoQ>
+    <SummaryTotal>${offerData.total.toFixed(2)}</SummaryTotal>
+  </Award>
+</GAEB>`
+
+    const blob = new Blob([gaebXml], { type: "application/xml" })
+
+    console.log("[v0] GAEB export completed")
+    return blob
+  },
+
+  downloadFile(blob: Blob, filename: string): void {
+    console.log("[v0] Downloading file:", filename)
+
+    // Create download link and trigger download
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    console.log("[v0] File download initiated")
+  },
+}
