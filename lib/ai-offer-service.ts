@@ -1,5 +1,7 @@
 import { generateObject } from "ai"
 import { z } from "zod"
+import { Buffer } from "buffer"
+import XLSX from "xlsx"
 
 export interface CustomerRequest {
   message: string
@@ -111,7 +113,28 @@ const GeneratedOfferSchema = z.object({
 })
 
 export async function analyzeCustomerRequest(request: CustomerRequest): Promise<OfferAnalysis> {
-  const fileInfo = request.files.map((f) => `${f.name} (${f.type}, ${Math.round(f.size / 1024)}KB)`).join("\n")
+  // Process uploaded files and extract their content
+  const fileContents: string[] = []
+
+  for (const file of request.files) {
+    try {
+      const content = await extractFileContent(file)
+      fileContents.push(content)
+      console.log(`[v0] Successfully processed file: ${file.name}`)
+    } catch (error) {
+      console.error(`[v0] Failed to process file ${file.name}:`, error)
+      fileContents.push(
+        `Fehler beim Verarbeiten von ${file.name}: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`,
+      )
+    }
+  }
+
+  const fileInfo = request.files
+    .map(
+      (f, index) =>
+        `${f.name} (${f.type}, ${Math.round(f.size / 1024)}KB)\nInhalt: ${fileContents[index]?.substring(0, 500)}${fileContents[index]?.length > 500 ? "..." : ""}`,
+    )
+    .join("\n\n")
 
   const prompt = `
 Du bist ein erfahrener Bauexperte und Kalkulationsspezialist für deutsche Handwerksbetriebe.
@@ -120,7 +143,7 @@ Analysiere die folgende Kundenanfrage und erstelle eine detaillierte Projektbewe
 KUNDENANFRAGE:
 ${request.message}
 
-${fileInfo ? `HOCHGELADENE DATEIEN:\n${fileInfo}` : ""}
+${fileInfo ? `HOCHGELADENE DATEIEN UND INHALTE:\n${fileInfo}` : ""}
 
 ${request.budget ? `BUDGET: €${request.budget}` : ""}
 ${request.timeline ? `ZEITRAHMEN: ${request.timeline}` : ""}
@@ -147,6 +170,7 @@ POSITIONSVORSCHLÄGE:
 - Denke an Nebenleistungen (Gerüst, Entsorgung, etc.)
 
 Erstelle eine professionelle Analyse mit konkreten, umsetzbaren Empfehlungen.
+Nutze die Informationen aus den hochgeladenen Dateien für eine präzise Bewertung.
 `
 
   const result = await generateObject({
@@ -232,23 +256,119 @@ Achte auf deutsche Rechtschreibung und professionelle Formulierungen.
 
 export async function extractFileContent(file: File): Promise<string> {
   try {
+    console.log(`[v0] Processing file: ${file.name}, type: ${file.type}, size: ${file.size}`)
+
     if (file.type === "text/plain") {
-      return await file.text()
+      const content = await file.text()
+      console.log(`[v0] Text file processed: ${content.length} characters`)
+      return content
     }
 
-    if (file.type === "application/pdf") {
-      // In production, use a PDF parsing library like pdf-parse
-      return `PDF-Datei: ${file.name} (${Math.round(file.size / 1024)}KB)`
+    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      return await extractTextFromPDF(file)
+    }
+
+    if (
+      file.type.includes("spreadsheet") ||
+      file.type.includes("excel") ||
+      file.name.toLowerCase().endsWith(".xlsx") ||
+      file.name.toLowerCase().endsWith(".xls")
+    ) {
+      return await extractTextFromExcel(file)
     }
 
     if (file.type.startsWith("image/")) {
-      return `Bild-Datei: ${file.name} (${Math.round(file.size / 1024)}KB)`
+      return `Bild-Datei: ${file.name} (${Math.round(file.size / 1024)}KB) - Bildanalyse wird unterstützt`
     }
 
-    return `Datei: ${file.name} (${file.type}, ${Math.round(file.size / 1024)}KB)`
+    // Try to read as text for other file types
+    try {
+      const content = await file.text()
+      if (content && content.trim().length > 0) {
+        console.log(`[v0] Generic text extraction successful: ${content.length} characters`)
+        return content
+      }
+    } catch (textError) {
+      console.log(`[v0] Could not read as text: ${textError}`)
+    }
+
+    return `Datei: ${file.name} (${file.type}, ${Math.round(file.size / 1024)}KB) - Inhalt konnte nicht extrahiert werden`
   } catch (error) {
-    console.error("Error extracting file content:", error)
-    return `Fehler beim Lesen der Datei: ${file.name}`
+    console.error(`[v0] Error extracting file content from ${file.name}:`, error)
+    return `Fehler beim Lesen der Datei: ${file.name} - ${error instanceof Error ? error.message : "Unbekannter Fehler"}`
+  }
+}
+
+async function extractTextFromPDF(file: File): Promise<string> {
+  try {
+    // Import pdf-parse dynamically to avoid SSR issues
+    const pdfParse = (await import("pdf-parse")).default
+
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    const data = await pdfParse(buffer, {
+      // Optimize for construction documents
+      max: 0, // Parse all pages
+      version: "v1.10.100",
+    })
+
+    if (!data.text || data.text.trim().length === 0) {
+      throw new Error("PDF enthält keinen lesbaren Text")
+    }
+
+    console.log(`[v0] PDF parsed successfully: ${data.numpages} pages, ${data.text.length} characters`)
+
+    return `PDF-Inhalt aus ${file.name} (${data.numpages} Seiten):\n\n${data.text}`
+  } catch (error) {
+    console.error("[v0] PDF parsing failed:", error)
+
+    // Fallback: Try to read as text (for text-based PDFs)
+    try {
+      const text = await file.text()
+      if (text && text.length > 0) {
+        console.log("[v0] Using fallback text extraction for PDF")
+        return `PDF-Inhalt aus ${file.name} (Fallback-Extraktion):\n\n${text}`
+      }
+    } catch (fallbackError) {
+      console.error("[v0] Fallback text extraction failed:", fallbackError)
+    }
+
+    throw new Error(`PDF-Verarbeitung fehlgeschlagen: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`)
+  }
+}
+
+async function extractTextFromExcel(file: File): Promise<string> {
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const workbook = XLSX.read(arrayBuffer, { type: "array" })
+
+    let extractedText = `Excel-Inhalt aus ${file.name}:\n\n`
+
+    // Process all sheets
+    workbook.SheetNames.forEach((sheetName, index) => {
+      const worksheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" })
+
+      extractedText += `=== Arbeitsblatt: ${sheetName} ===\n`
+
+      jsonData.forEach((row: any[], rowIndex) => {
+        if (row.some((cell) => cell && cell.toString().trim())) {
+          extractedText += row.join("\t") + "\n"
+        }
+      })
+
+      extractedText += "\n"
+    })
+
+    console.log(`[v0] Excel parsed successfully: ${workbook.SheetNames.length} sheets`)
+
+    return extractedText
+  } catch (error) {
+    console.error("[v0] Excel parsing failed:", error)
+    throw new Error(
+      `Excel-Verarbeitung fehlgeschlagen: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`,
+    )
   }
 }
 

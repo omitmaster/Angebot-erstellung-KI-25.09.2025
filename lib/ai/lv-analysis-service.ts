@@ -1,5 +1,6 @@
 import { generateObject, generateText } from "ai"
 import { z } from "zod"
+import { Buffer } from "buffer"
 
 // Schema für LV-Position Analyse
 const LVPositionSchema = z.object({
@@ -230,21 +231,115 @@ function getFileType(filename: string): "pdf" | "excel" | "gaeb" {
   }
 }
 
-// Mock implementations for file parsing - in production use proper libraries
 async function extractTextFromPDF(file: File): Promise<string> {
-  // In production: use pdf-parse or similar library
-  const text = await file.text()
-  return `PDF Content from ${file.name}:\n${text.substring(0, 5000)}...`
+  try {
+    // Import pdf-parse dynamically to avoid SSR issues
+    const pdfParse = (await import("pdf-parse")).default
+
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    const data = await pdfParse(buffer, {
+      // Optimize for construction documents
+      max: 0, // Parse all pages
+      version: "v1.10.100",
+    })
+
+    if (!data.text || data.text.trim().length === 0) {
+      throw new Error("PDF enthält keinen lesbaren Text")
+    }
+
+    console.log(`[v0] PDF parsed successfully: ${data.numpages} pages, ${data.text.length} characters`)
+
+    return data.text
+  } catch (error) {
+    console.error("[v0] PDF parsing failed:", error)
+
+    // Fallback: Try to read as text (for text-based PDFs)
+    try {
+      const text = await file.text()
+      if (text && text.length > 0) {
+        console.log("[v0] Using fallback text extraction")
+        return text
+      }
+    } catch (fallbackError) {
+      console.error("[v0] Fallback text extraction failed:", fallbackError)
+    }
+
+    throw new Error(`PDF-Verarbeitung fehlgeschlagen: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`)
+  }
 }
 
 async function extractTextFromExcel(file: File): Promise<string> {
-  // In production: use xlsx library
-  const arrayBuffer = await file.arrayBuffer()
-  return `Excel Content from ${file.name}:\nPosition data extracted from spreadsheet...`
+  try {
+    // Import xlsx dynamically
+    const XLSX = await import("xlsx")
+
+    const arrayBuffer = await file.arrayBuffer()
+    const workbook = XLSX.read(arrayBuffer, { type: "array" })
+
+    let extractedText = `Excel-Inhalt aus ${file.name}:\n\n`
+
+    // Process all sheets
+    workbook.SheetNames.forEach((sheetName, index) => {
+      const worksheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" })
+
+      extractedText += `=== Arbeitsblatt: ${sheetName} ===\n`
+
+      jsonData.forEach((row: any[], rowIndex) => {
+        if (row.some((cell) => cell && cell.toString().trim())) {
+          extractedText += row.join("\t") + "\n"
+        }
+      })
+
+      extractedText += "\n"
+    })
+
+    console.log(`[v0] Excel parsed successfully: ${workbook.SheetNames.length} sheets`)
+
+    return extractedText
+  } catch (error) {
+    console.error("[v0] Excel parsing failed:", error)
+    throw new Error(
+      `Excel-Verarbeitung fehlgeschlagen: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`,
+    )
+  }
 }
 
 async function extractTextFromGAEB(file: File): Promise<string> {
-  // In production: use GAEB parsing library
-  const arrayBuffer = await file.arrayBuffer()
-  return `GAEB Content from ${file.name}:\nStructured construction data...`
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const decoder = new TextDecoder("iso-8859-1") // GAEB typically uses ISO-8859-1
+    const content = decoder.decode(arrayBuffer)
+
+    // Basic GAEB structure parsing
+    let extractedText = `GAEB-Inhalt aus ${file.name}:\n\n`
+
+    // Look for common GAEB patterns
+    const lines = content.split("\n")
+    const currentSection = ""
+
+    lines.forEach((line) => {
+      const trimmedLine = line.trim()
+
+      // Detect position codes (e.g., 01.001, 02.001)
+      if (/^\d{2}\.\d{3}/.test(trimmedLine)) {
+        extractedText += `\nPosition: ${trimmedLine}\n`
+      }
+      // Detect text blocks
+      else if (trimmedLine.length > 10 && !trimmedLine.startsWith("#")) {
+        extractedText += `${trimmedLine}\n`
+      }
+    })
+
+    console.log(`[v0] GAEB parsed successfully: ${lines.length} lines processed`)
+
+    return extractedText
+  } catch (error) {
+    console.error("[v0] GAEB parsing failed:", error)
+    throw new Error(
+      `GAEB-Verarbeitung fehlgeschlagen: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`,
+    )
+  }
 }
