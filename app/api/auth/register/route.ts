@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { handleApiError } from "@/lib/errors"
 import { validateData, userRegistrationSchema } from "@/lib/validations"
-import { getClientIP } from "@/lib/auth/security"
+import { getClientIP } from "@/lib/auth/server-security"
 import { registerRateLimit, getRateLimitKey } from "@/lib/auth/rate-limit"
 import { securityHeaders } from "@/lib/auth/security"
 

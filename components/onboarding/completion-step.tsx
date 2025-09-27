@@ -6,7 +6,7 @@ import { CheckCircle, ArrowRight, Hammer, Users, Building, Settings } from "luci
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { useAnalytics } from "@/lib/monitoring/analytics"
-import { ProfileService } from "@/lib/database/profiles"
+import { createUserProfile } from "@/lib/actions/profile-actions"
 import { useAuth } from "@/lib/auth/hooks"
 
 interface CompletionStepProps {
@@ -27,8 +27,7 @@ export function CompletionStep({ data }: CompletionStepProps) {
 
     setIsCreating(true)
     try {
-      // Create user profile
-      await ProfileService.createProfile(user.id, {
+      const result = await createUserProfile(user.id, {
         user_type: data.userType,
         first_name: data.profile.firstName,
         last_name: data.profile.lastName,
@@ -40,6 +39,10 @@ export function CompletionStep({ data }: CompletionStepProps) {
         company_name: data.business.companyName,
         website: data.business.website,
       })
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
 
       track("Onboarding Completed", {
         userType: data.userType,
