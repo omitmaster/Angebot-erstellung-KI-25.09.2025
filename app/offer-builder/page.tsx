@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -148,6 +148,39 @@ export default function OfferBuilderPage() {
   const [selectedPosition, setSelectedPosition] = useState<OfferPosition | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState("positions")
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const dataParam = urlParams.get("data")
+
+    if (dataParam) {
+      try {
+        const importedData = JSON.parse(decodeURIComponent(dataParam))
+        console.log("[v0] Loading AI-generated offer data:", importedData)
+
+        // Convert AI-generated data to offer format
+        const convertedData: OfferData = {
+          ...offerData,
+          projectTitle: importedData.projectTitle,
+          customer: importedData.customer,
+          positions: importedData.positions.map((pos: any) => ({
+            ...pos,
+            category: pos.category || "Sonstige",
+          })),
+          subtotalLabor: importedData.subtotal * 0.7,
+          subtotalMaterial: importedData.subtotal * 0.3,
+          riskPercent: importedData.riskPercent,
+          total: importedData.total,
+          textBlocks: importedData.textBlocks,
+        }
+
+        setOfferData(convertedData)
+        console.log("[v0] AI-generated offer data loaded successfully")
+      } catch (error) {
+        console.error("[v0] Error loading AI-generated data:", error)
+      }
+    }
+  }, [])
 
   const handleAddPosition = () => {
     const newPosition: OfferPosition = {

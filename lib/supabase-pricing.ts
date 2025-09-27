@@ -1,20 +1,11 @@
 // Supabase-Integration für die Preisdatenbank
 // Verbindet die KI-Services mit der Datenbank
 
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase/server"
 import type { PDFAnalysisResult, PricingSearchCriteria, PricingAnalysisResult } from "./ai-pricing-service"
 
 function createSupabaseClient() {
-  const cookieStore = cookies()
-
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value
-      },
-    },
-  })
+  return createClient()
 }
 
 // PDF-Upload und Speicherung in der Datenbank

@@ -21,6 +21,7 @@ import {
   Database,
   MessageCircle,
   Briefcase,
+  Sparkles,
 } from "lucide-react"
 
 const navigation = [
@@ -28,6 +29,7 @@ const navigation = [
   { name: "Aufträge", href: "/jobs", icon: Briefcase },
   { name: "Nachrichten", href: "/messages", icon: MessageCircle },
   { name: "LV-Analyse", href: "/lv-analysis", icon: FileText },
+  { name: "KI-Angebots-Generator", href: "/ai-angebots-generator", icon: Sparkles },
   { name: "Angebots-Builder", href: "/offer-builder", icon: Calculator },
   { name: "Preisdatenbank", href: "/price-database", icon: Database },
   { name: "Versand & Follow-up", href: "/follow-up", icon: Send },
