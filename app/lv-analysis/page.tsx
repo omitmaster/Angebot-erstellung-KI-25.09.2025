@@ -28,6 +28,90 @@ import {
 } from "lucide-react"
 import type { LVPosition, LVDocumentAnalysis } from "@/lib/ai/lv-analysis-service"
 
+const FILE_VALIDATION = {
+  maxSize: 10 * 1024 * 1024, // 10MB
+  allowedTypes: [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/plain",
+  ],
+  allowedExtensions: [".pdf", ".xlsx", ".xls", ".x80", ".x81", ".x82", ".x83"],
+  maxFiles: 5,
+}
+
+const validateFile = (file: File): { isValid: boolean; error?: string } => {
+  // Check file size
+  if (file.size > FILE_VALIDATION.maxSize) {
+    return {
+      isValid: false,
+      error: `Datei "${file.name}" ist zu groß (${Math.round(file.size / 1024 / 1024)}MB). Maximale Größe: ${FILE_VALIDATION.maxSize / 1024 / 1024}MB.`,
+    }
+  }
+
+  // Check file extension
+  const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf("."))
+  if (!FILE_VALIDATION.allowedExtensions.includes(fileExtension)) {
+    return {
+      isValid: false,
+      error: `Dateityp "${fileExtension}" wird nicht unterstützt. Erlaubte Formate: ${FILE_VALIDATION.allowedExtensions.join(", ")}.`,
+    }
+  }
+
+  // Check MIME type (if available)
+  if (file.type && !FILE_VALIDATION.allowedTypes.includes(file.type)) {
+    // Only warn if extension is allowed but MIME type isn't
+    if (FILE_VALIDATION.allowedExtensions.includes(fileExtension)) {
+      console.warn(`File "${file.name}" has unexpected MIME type: ${file.type}`)
+    } else {
+      return {
+        isValid: false,
+        error: `Dateityp "${file.type}" wird nicht unterstützt.`,
+      }
+    }
+  }
+
+  // Check for empty files
+  if (file.size === 0) {
+    return {
+      isValid: false,
+      error: `Datei "${file.name}" ist leer.`,
+    }
+  }
+
+  return { isValid: true }
+}
+
+const validateFiles = (files: File[]): { validFiles: File[]; errors: string[] } => {
+  const validFiles: File[] = []
+  const errors: string[] = []
+
+  // Check total number of files
+  if (files.length > FILE_VALIDATION.maxFiles) {
+    errors.push(`Zu viele Dateien ausgewählt. Maximum: ${FILE_VALIDATION.maxFiles} Dateien.`)
+    return { validFiles, errors }
+  }
+
+  // Validate each file
+  files.forEach((file) => {
+    const validation = validateFile(file)
+    if (validation.isValid) {
+      validFiles.push(file)
+    } else if (validation.error) {
+      errors.push(validation.error)
+    }
+  })
+
+  // Check for duplicate file names
+  const fileNames = validFiles.map((f) => f.name.toLowerCase())
+  const duplicates = fileNames.filter((name, index) => fileNames.indexOf(name) !== index)
+  if (duplicates.length > 0) {
+    errors.push(`Doppelte Dateinamen gefunden: ${[...new Set(duplicates)].join(", ")}`)
+  }
+
+  return { validFiles, errors }
+}
+
 export default function LVAnalysisPage() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -39,11 +123,61 @@ export default function LVAnalysisPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "clear" | "assumption" | "unclear">("all")
   const [error, setError] = useState<string | null>(null)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
-    setUploadedFiles(files)
     setError(null)
+    setValidationErrors([])
+
+    if (files.length === 0) {
+      return
+    }
+
+    const { validFiles, errors } = validateFiles(files)
+
+    if (errors.length > 0) {
+      setValidationErrors(errors)
+      // Only set valid files if there are any
+      if (validFiles.length > 0) {
+        setUploadedFiles(validFiles)
+      }
+      return
+    }
+
+    setUploadedFiles(validFiles)
+    console.log(`[v0] Successfully validated and uploaded ${validFiles.length} files`)
+  }
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const files = Array.from(event.dataTransfer.files)
+    setError(null)
+    setValidationErrors([])
+
+    if (files.length === 0) {
+      return
+    }
+
+    const { validFiles, errors } = validateFiles(files)
+
+    if (errors.length > 0) {
+      setValidationErrors(errors)
+      if (validFiles.length > 0) {
+        setUploadedFiles(validFiles)
+      }
+      return
+    }
+
+    setUploadedFiles(validFiles)
+    console.log(`[v0] Successfully validated and dropped ${validFiles.length} files`)
   }
 
   const handleAnalyze = async () => {
@@ -52,6 +186,7 @@ export default function LVAnalysisPage() {
     setIsAnalyzing(true)
     setAnalysisProgress(0)
     setError(null)
+    setValidationErrors([])
 
     try {
       const file = uploadedFiles[0] // Analyze first file
@@ -189,14 +324,24 @@ export default function LVAnalysisPage() {
                   <CardTitle>Dokumente hochladen</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                  <div
+                    className="border-2 border-dashed border-border rounded-lg p-8 text-center transition-colors hover:border-accent"
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  >
                     <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-medium mb-2">LV-Dateien hier ablegen</h3>
-                    <p className="text-muted-foreground mb-4">Unterstützte Formate: PDF, Excel, GAEB</p>
+                    <p className="text-muted-foreground mb-2">
+                      Unterstützte Formate: PDF, Excel (.xlsx, .xls), GAEB (.x80-.x83)
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Maximale Dateigröße: {FILE_VALIDATION.maxSize / 1024 / 1024}MB • Maximal{" "}
+                      {FILE_VALIDATION.maxFiles} Dateien
+                    </p>
                     <input
                       type="file"
                       multiple
-                      accept=".pdf,.xlsx,.xls,.x80,.x81,.x82,.x83"
+                      accept={FILE_VALIDATION.allowedExtensions.join(",")}
                       onChange={handleFileUpload}
                       className="hidden"
                       id="file-upload"
@@ -208,6 +353,22 @@ export default function LVAnalysisPage() {
                     </label>
                   </div>
 
+                  {validationErrors.length > 0 && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        <div className="space-y-1">
+                          <p className="font-medium">Dateivalidierung fehlgeschlagen:</p>
+                          {validationErrors.map((error, index) => (
+                            <p key={index} className="text-sm">
+                              • {error}
+                            </p>
+                          ))}
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   {uploadedFiles.length > 0 && (
                     <div className="space-y-2">
                       <h4 className="font-medium">Hochgeladene Dateien:</h4>
@@ -216,7 +377,9 @@ export default function LVAnalysisPage() {
                           <FileText className="h-5 w-5 text-muted-foreground" />
                           <div className="flex-1">
                             <p className="font-medium">{file.name}</p>
-                            <p className="text-sm text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                            <p className="text-sm text-muted-foreground">
+                              {(file.size / 1024 / 1024).toFixed(2)} MB • {file.type || "Unbekannter Typ"}
+                            </p>
                           </div>
                           <Button
                             size="sm"

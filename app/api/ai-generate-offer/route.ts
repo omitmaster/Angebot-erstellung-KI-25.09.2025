@@ -37,10 +37,60 @@ const GeneratedOfferSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const { analysisResult, customerMessage } = await request.json()
+    console.log("[v0] AI Generate Offer API: Starting request processing")
 
-    const supabase = createClient()
-    const { data: pricingData } = await supabase.from("pricebook_items").select("*").eq("is_active", true).limit(50)
+    const requestData = await request.json()
+    const { analysisResult, customerMessage } = requestData
+
+    // Validate input data
+    if (!analysisResult || !customerMessage) {
+      console.error("[v0] AI Generate Offer API: Missing required data")
+      return NextResponse.json(
+        {
+          error: "Unvollständige Daten",
+          details: "Analyse-Ergebnis und Kundennachricht sind erforderlich.",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Validate analysis result structure
+    if (!analysisResult.projectType || !analysisResult.keyRequirements) {
+      console.error("[v0] AI Generate Offer API: Invalid analysis result structure")
+      return NextResponse.json(
+        {
+          error: "Ungültige Analysedaten",
+          details: "Die Analyse-Ergebnisse sind unvollständig. Bitte führen Sie zuerst eine neue Analyse durch.",
+        },
+        { status: 422 },
+      )
+    }
+
+    console.log(`[v0] AI Generate Offer API: Processing offer for project type: ${analysisResult.projectType}`)
+
+    // Get pricing data from Supabase with error handling
+    let pricingData: any[] = []
+    try {
+      const supabase = await createClient()
+      const { data, error: supabaseError } = await supabase
+        .from("pricebook_items")
+        .select("*")
+        .eq("is_active", true)
+        .limit(50)
+
+      if (supabaseError) {
+        console.error("[v0] AI Generate Offer API: Supabase error:", supabaseError)
+        // Continue without pricing data rather than failing
+        console.log("[v0] AI Generate Offer API: Continuing without pricing data")
+      } else {
+        pricingData = data || []
+        console.log(`[v0] AI Generate Offer API: Retrieved ${pricingData.length} pricing items`)
+      }
+    } catch (dbError) {
+      console.error("[v0] AI Generate Offer API: Database connection failed:", dbError)
+      // Continue without pricing data
+      console.log("[v0] AI Generate Offer API: Continuing without pricing data due to DB error")
+    }
 
     const offerPrompt = `
 Du bist ein erfahrener Angebotsspezialist für deutsche Handwerksbetriebe.
@@ -48,19 +98,21 @@ Erstelle basierend auf der KI-Analyse ein vollständiges, professionelles Angebo
 
 ANALYSE-ERGEBNIS:
 Projekttyp: ${analysisResult.projectType}
-Geschätzter Wert: €${analysisResult.estimatedValue}
+Geschätzter Wert: €${analysisResult.estimatedValue || "Nicht angegeben"}
 Komplexität: ${analysisResult.complexity}
-Hauptanforderungen: ${analysisResult.keyRequirements.join(", ")}
+Hauptanforderungen: ${analysisResult.keyRequirements?.join(", ") || "Keine spezifischen Anforderungen"}
 
 URSPRÜNGLICHE KUNDENANFRAGE:
 ${customerMessage}
 
 VERFÜGBARE PREISBUCH-DATEN:
 ${
-  pricingData
-    ?.slice(0, 20)
-    .map((item) => `${item.code}: ${item.title} - ${item.base_minutes}min, €${item.base_material_cost} Material`)
-    .join("\n") || "Keine Preisdaten verfügbar"
+  pricingData?.length > 0
+    ? pricingData
+        .slice(0, 20)
+        .map((item) => `${item.code}: ${item.title} - ${item.base_minutes}min, €${item.base_material_cost} Material`)
+        .join("\n")
+    : "Keine Preisdaten verfügbar - verwende Marktpreise"
 }
 
 ANGEBOTS-ANFORDERUNGEN:
@@ -81,28 +133,129 @@ TEXTBAUSTEINE:
 
 Erstelle ein vollständiges, marktübliches Angebot mit allen notwendigen Positionen.
 Achte auf deutsche Rechtschreibung und professionelle Formulierungen.
+Stelle sicher, dass alle Positionen realistische Preise haben.
 `
 
-    const result = await generateObject({
-      model: "openai/gpt-4o",
-      schema: GeneratedOfferSchema,
-      prompt: offerPrompt,
-      maxOutputTokens: 3000,
-    })
+    // Generate offer with AI
+    let result
+    try {
+      result = await generateObject({
+        model: "openai/gpt-4o",
+        schema: GeneratedOfferSchema,
+        prompt: offerPrompt,
+        maxOutputTokens: 3000,
+        temperature: 0.1,
+      })
 
+      console.log("[v0] AI Generate Offer API: AI offer generation completed successfully")
+    } catch (aiError) {
+      console.error("[v0] AI Generate Offer API: AI offer generation failed:", aiError)
+
+      // Provide specific error messages based on error type
+      let errorMessage = "Angebotserstellung fehlgeschlagen"
+      let errorDetails = "Bitte versuchen Sie es erneut"
+
+      if (aiError instanceof Error) {
+        if (aiError.message.includes("timeout")) {
+          errorMessage = "Zeitüberschreitung bei der Angebotserstellung"
+          errorDetails = "Das Projekt ist zu komplex. Versuchen Sie es mit weniger Positionen"
+        } else if (aiError.message.includes("rate limit") || aiError.message.includes("quota")) {
+          errorMessage = "Service temporär überlastet"
+          errorDetails = "Bitte warten Sie einen Moment und versuchen Sie es erneut"
+        } else if (aiError.message.includes("content")) {
+          errorMessage = "Angebot konnte nicht erstellt werden"
+          errorDetails = "Überprüfen Sie die Analyse-Ergebnisse und versuchen Sie es erneut"
+        } else {
+          errorDetails = aiError.message
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error: errorMessage,
+          details: errorDetails,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 },
+      )
+    }
+
+    // Validate and process the generated offer
     const offer = result.object
-    offer.positions = offer.positions.map((pos, index) => ({
-      ...pos,
-      id: `pos_${Date.now()}_${index}`,
-      totalPrice: pos.quantity * pos.unitPrice,
-    }))
 
-    offer.subtotal = offer.positions.reduce((sum, pos) => sum + pos.totalPrice, 0)
-    offer.total = offer.subtotal * (1 + offer.riskPercent / 100)
+    if (!offer.positions || offer.positions.length === 0) {
+      console.error("[v0] AI Generate Offer API: No positions generated")
+      return NextResponse.json(
+        {
+          error: "Unvollständiges Angebot",
+          details:
+            "Es konnten keine Angebotspositionen erstellt werden. Bitte geben Sie mehr Details zu Ihrem Projekt an.",
+        },
+        { status: 422 },
+      )
+    }
 
-    return NextResponse.json(offer)
+    // Process positions and calculate totals with error handling
+    try {
+      offer.positions = offer.positions.map((pos, index) => ({
+        ...pos,
+        id: `pos_${Date.now()}_${index}`,
+        totalPrice: Math.round(pos.quantity * pos.unitPrice * 100) / 100, // Round to 2 decimals
+      }))
+
+      offer.subtotal = Math.round(offer.positions.reduce((sum, pos) => sum + pos.totalPrice, 0) * 100) / 100
+      offer.total = Math.round(offer.subtotal * (1 + (offer.riskPercent || 15) / 100) * 100) / 100
+
+      console.log(
+        `[v0] AI Generate Offer API: Offer processed successfully - ${offer.positions.length} positions, €${offer.total} total`,
+      )
+    } catch (calculationError) {
+      console.error("[v0] AI Generate Offer API: Price calculation failed:", calculationError)
+      return NextResponse.json(
+        {
+          error: "Preisberechnung fehlgeschlagen",
+          details: "Die Angebotssummen konnten nicht korrekt berechnet werden.",
+        },
+        { status: 500 },
+      )
+    }
+
+    const finalOffer = {
+      ...offer,
+      id: `offer_${Date.now()}`,
+    }
+
+    console.log("[v0] AI Generate Offer API: Offer generation completed successfully")
+    return NextResponse.json(finalOffer)
   } catch (error) {
-    console.error("[v0] Offer generation error:", error)
-    return NextResponse.json({ error: "Fehler bei der Angebotserstellung" }, { status: 500 })
+    console.error("[v0] AI Generate Offer API: Unexpected error:", error)
+
+    // Provide user-friendly error messages
+    let errorMessage = "Ein unerwarteter Fehler ist aufgetreten"
+    let errorDetails = "Bitte versuchen Sie es erneut oder kontaktieren Sie den Support"
+
+    if (error instanceof Error) {
+      if (error.message.includes("JSON")) {
+        errorMessage = "Datenformat-Fehler"
+        errorDetails = "Die Anfrage konnte nicht verarbeitet werden. Bitte laden Sie die Seite neu"
+      } else if (error.message.includes("network") || error.message.includes("fetch")) {
+        errorMessage = "Netzwerkfehler"
+        errorDetails = "Überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut"
+      } else if (error.message.includes("memory") || error.message.includes("heap")) {
+        errorMessage = "Angebot zu komplex"
+        errorDetails = "Das Angebot ist zu umfangreich. Versuchen Sie es mit weniger Positionen"
+      } else {
+        errorDetails = error.message
+      }
+    }
+
+    return NextResponse.json(
+      {
+        error: errorMessage,
+        details: errorDetails,
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 },
+    )
   }
 }
