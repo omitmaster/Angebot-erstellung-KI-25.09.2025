@@ -4,8 +4,6 @@ import { createBrowserClient } from "@supabase/ssr"
 import { useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 
-const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-
 export interface UserProfile {
   id: string
   first_name?: string
@@ -17,12 +15,26 @@ export interface UserProfile {
   created_at?: string
 }
 
+let supabaseClient: ReturnType<typeof createBrowserClient> | null = null
+
+function getSupabaseClient() {
+  if (!supabaseClient) {
+    supabaseClient = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    )
+  }
+  return supabaseClient
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const supabase = getSupabaseClient()
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
@@ -51,6 +63,7 @@ export function useAuth() {
 
   const fetchProfile = async (userId: string) => {
     try {
+      const supabase = getSupabaseClient()
       const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
 
       if (error && error.code !== "PGRST116") {
@@ -66,6 +79,7 @@ export function useAuth() {
   }
 
   const signOut = async () => {
+    const supabase = getSupabaseClient()
     const { error } = await supabase.auth.signOut()
     if (error) {
       console.error("Error signing out:", error)
@@ -77,8 +91,8 @@ export function useAuth() {
     profile,
     loading,
     signOut,
-    supabase,
+    supabase: getSupabaseClient(),
   }
 }
 
-export { supabase }
+export const getSupabase = getSupabaseClient
