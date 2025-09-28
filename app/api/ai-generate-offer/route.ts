@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { generateObject } from "ai"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { getPricingRecommendations } from "@/lib/price-database-integration"
 
 const GeneratedOfferSchema = z.object({
   projectTitle: z.string(),
@@ -22,6 +23,14 @@ const GeneratedOfferSchema = z.object({
       unitPrice: z.number(),
       totalPrice: z.number(),
       category: z.string(),
+      marketData: z
+        .object({
+          confidence: z.number(),
+          marketPrice: z.number(),
+          priceVariance: z.number(),
+          sources: z.array(z.string()),
+        })
+        .optional(),
     }),
   ),
   subtotal: z.number(),
@@ -33,6 +42,14 @@ const GeneratedOfferSchema = z.object({
     process: z.string(),
     terms: z.string(),
   }),
+  marketAnalysis: z
+    .object({
+      positionsAnalyzed: z.number(),
+      totalPositions: z.number(),
+      averageConfidence: z.number(),
+      dataQuality: z.string(),
+    })
+    .optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -70,8 +87,12 @@ export async function POST(request: NextRequest) {
 
     // Get pricing data from Supabase with error handling
     let pricingData: any[] = []
+    let marketRecommendations: any[] = []
+
     try {
       const supabase = await createClient()
+
+      // Get traditional pricebook items
       const { data, error: supabaseError } = await supabase
         .from("pricebook_items")
         .select("*")
@@ -80,16 +101,34 @@ export async function POST(request: NextRequest) {
 
       if (supabaseError) {
         console.error("[v0] AI Generate Offer API: Supabase error:", supabaseError)
-        // Continue without pricing data rather than failing
-        console.log("[v0] AI Generate Offer API: Continuing without pricing data")
       } else {
         pricingData = data || []
-        console.log(`[v0] AI Generate Offer API: Retrieved ${pricingData.length} pricing items`)
+        console.log(`[v0] AI Generate Offer API: Retrieved ${pricingData.length} pricebook items`)
+      }
+
+      if (analysisResult.keyRequirements && analysisResult.projectType) {
+        try {
+          // Extract potential positions from requirements
+          const estimatedPositions = analysisResult.keyRequirements.map((req: string, index: number) => ({
+            description: req,
+            unit: "Stk", // Default unit
+            quantity: 1,
+          }))
+
+          marketRecommendations = await getPricingRecommendations(
+            analysisResult.projectType,
+            analysisResult.branch || "Allgemein",
+            estimatedPositions,
+          )
+
+          console.log(`[v0] AI Generate Offer API: Retrieved ${marketRecommendations.length} market recommendations`)
+        } catch (marketError) {
+          console.error("[v0] AI Generate Offer API: Market pricing failed:", marketError)
+          // Continue without market data
+        }
       }
     } catch (dbError) {
       console.error("[v0] AI Generate Offer API: Database connection failed:", dbError)
-      // Continue without pricing data
-      console.log("[v0] AI Generate Offer API: Continuing without pricing data due to DB error")
     }
 
     const offerPrompt = `
@@ -101,6 +140,7 @@ Projekttyp: ${analysisResult.projectType}
 Geschätzter Wert: €${analysisResult.estimatedValue || "Nicht angegeben"}
 Komplexität: ${analysisResult.complexity}
 Hauptanforderungen: ${analysisResult.keyRequirements?.join(", ") || "Keine spezifischen Anforderungen"}
+Gewerk: ${analysisResult.branch || "Allgemein"}
 
 URSPRÜNGLICHE KUNDENANFRAGE:
 ${customerMessage}
@@ -115,10 +155,24 @@ ${
     : "Keine Preisdaten verfügbar - verwende Marktpreise"
 }
 
+MARKTBASIERTE PREISEMPFEHLUNGEN:
+${
+  marketRecommendations?.length > 0
+    ? marketRecommendations
+        .filter((rec) => rec.recommendedPrice > 0)
+        .map(
+          (rec) =>
+            `${rec.position.description}: €${rec.recommendedPrice}/${rec.position.unit} (Konfidenz: ${Math.round(rec.confidence * 100)}%, Quellen: ${rec.sources.join(", ")})`,
+        )
+        .join("\n")
+    : "Keine Marktdaten verfügbar"
+}
+
 ANGEBOTS-ANFORDERUNGEN:
 - Erstelle einen aussagekräftigen Projekttitel
 - Extrahiere/schätze Kundendaten aus der Anfrage
-- Verwende realistische deutsche Handwerkerpreise (2024/2025)
+- VERWENDE VORRANGIG DIE MARKTBASIERTEN PREISEMPFEHLUNGEN wenn verfügbar
+- Fallback: Realistische deutsche Handwerkerpreise (2024/2025)
 - Kalkuliere mit Stundensatz von 80-90€
 - Materialaufschlag 20-30%
 - Risikozuschlag 10-20% je nach Komplexität
@@ -127,13 +181,13 @@ ANGEBOTS-ANFORDERUNGEN:
 
 TEXTBAUSTEINE:
 - Einleitung: Professionelle Begrüßung und Projektbezug
-- Vorteile: Warum der Kunde uns wählen sollte
+- Vorteile: Warum der Kunde uns wählen sollte (erwähne Erfahrung aus ${marketRecommendations.length > 0 ? "vielen ähnlichen Projekten" : "langjähriger Praxis"})
 - Ablauf: Wie das Projekt durchgeführt wird
 - Bedingungen: Zahlungsbedingungen, Gewährleistung, etc.
 
 Erstelle ein vollständiges, marktübliches Angebot mit allen notwendigen Positionen.
 Achte auf deutsche Rechtschreibung und professionelle Formulierungen.
-Stelle sicher, dass alle Positionen realistische Preise haben.
+Stelle sicher, dass alle Positionen realistische, marktbasierte Preise haben.
 `
 
     // Generate offer with AI
@@ -197,17 +251,48 @@ Stelle sicher, dass alle Positionen realistische Preise haben.
 
     // Process positions and calculate totals with error handling
     try {
-      offer.positions = offer.positions.map((pos, index) => ({
-        ...pos,
-        id: `pos_${Date.now()}_${index}`,
-        totalPrice: Math.round(pos.quantity * pos.unitPrice * 100) / 100, // Round to 2 decimals
-      }))
+      offer.positions = offer.positions.map((pos, index) => {
+        const marketMatch = marketRecommendations.find((rec) =>
+          rec.position.description.toLowerCase().includes(pos.title.toLowerCase().substring(0, 10)),
+        )
+
+        return {
+          ...pos,
+          id: `pos_${Date.now()}_${index}`,
+          totalPrice: Math.round(pos.quantity * pos.unitPrice * 100) / 100,
+          marketData: marketMatch
+            ? {
+                confidence: marketMatch.confidence,
+                marketPrice: marketMatch.recommendedPrice,
+                priceVariance:
+                  marketMatch.recommendedPrice > 0
+                    ? Math.round(((pos.unitPrice - marketMatch.recommendedPrice) / marketMatch.recommendedPrice) * 100)
+                    : 0,
+                sources: marketMatch.sources,
+              }
+            : null,
+        }
+      })
 
       offer.subtotal = Math.round(offer.positions.reduce((sum, pos) => sum + pos.totalPrice, 0) * 100) / 100
       offer.total = Math.round(offer.subtotal * (1 + (offer.riskPercent || 15) / 100) * 100) / 100
 
+      const positionsWithMarketData = offer.positions.filter((pos) => pos.marketData)
+      const avgConfidence =
+        positionsWithMarketData.length > 0
+          ? positionsWithMarketData.reduce((sum, pos) => sum + pos.marketData.confidence, 0) /
+            positionsWithMarketData.length
+          : 0
+
+      offer.marketAnalysis = {
+        positionsAnalyzed: positionsWithMarketData.length,
+        totalPositions: offer.positions.length,
+        averageConfidence: Math.round(avgConfidence * 100),
+        dataQuality: avgConfidence > 0.8 ? "Hoch" : avgConfidence > 0.6 ? "Mittel" : "Niedrig",
+      }
+
       console.log(
-        `[v0] AI Generate Offer API: Offer processed successfully - ${offer.positions.length} positions, €${offer.total} total`,
+        `[v0] AI Generate Offer API: Offer processed successfully - ${offer.positions.length} positions, €${offer.total} total, ${positionsWithMarketData.length} with market data`,
       )
     } catch (calculationError) {
       console.error("[v0] AI Generate Offer API: Price calculation failed:", calculationError)

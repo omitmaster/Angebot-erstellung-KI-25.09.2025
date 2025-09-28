@@ -25,6 +25,7 @@ import {
   Download,
 } from "lucide-react"
 import { useDropzone } from "react-dropzone"
+import { OfferMarketAnalysis } from "@/components/offer-market-analysis"
 
 interface AnalysisResult {
   projectType: string
@@ -63,6 +64,12 @@ interface GeneratedOffer {
     unitPrice: number
     totalPrice: number
     category: string
+    marketData?: {
+      confidence: number
+      marketPrice: number
+      priceVariance: number
+      sources: string[]
+    }
   }>
   subtotal: number
   riskPercent: number
@@ -72,6 +79,12 @@ interface GeneratedOffer {
     advantages: string
     process: string
     terms: string
+  }
+  marketAnalysis?: {
+    positionsAnalyzed: number
+    totalPositions: number
+    averageConfidence: number
+    dataQuality: string
   }
 }
 
@@ -578,113 +591,160 @@ Beispiel:
 
           {/* Generated Offer Step */}
           {currentStep === "offer" && generatedOffer && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                    Angebot erfolgreich erstellt
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Projekt</label>
-                      <p className="font-medium">{generatedOffer.projectTitle}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Kunde</label>
-                      <p className="font-medium">{generatedOffer.customer.name}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Positionen</label>
-                      <p className="font-medium">{generatedOffer.positions.length} Stück</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Gesamtsumme</label>
-                      <p className="font-medium text-accent">€{generatedOffer.total.toFixed(2)}</p>
-                    </div>
-                  </div>
+            <div className="space-y-6">
+              {generatedOffer.marketAnalysis && (
+                <OfferMarketAnalysis
+                  marketAnalysis={generatedOffer.marketAnalysis}
+                  positions={generatedOffer.positions}
+                />
+              )}
 
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <Button onClick={handleExportOffer} className="w-full">
-                      <Download className="h-4 w-4 mr-2" />
-                      Im Angebots-Builder öffnen
-                    </Button>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant="outline" size="sm">
-                        <FileText className="h-4 w-4 mr-2" />
-                        PDF Export
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Send className="h-4 w-4 mr-2" />
-                        Versenden
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Angebots-Vorschau</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-96">
-                    <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                      Angebot erfolgreich erstellt
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <h4 className="font-medium mb-2">Einleitung</h4>
-                        <p className="text-muted-foreground whitespace-pre-line">
-                          {generatedOffer.textBlocks.introduction}
-                        </p>
+                        <label className="text-sm font-medium text-muted-foreground">Projekt</label>
+                        <p className="font-medium">{generatedOffer.projectTitle}</p>
                       </div>
-
-                      <Separator />
-
                       <div>
-                        <h4 className="font-medium mb-2">Leistungsverzeichnis</h4>
-                        <div className="space-y-2">
-                          {generatedOffer.positions.slice(0, 3).map((position, index) => (
-                            <div key={position.id} className="flex justify-between items-start p-2 bg-muted rounded">
-                              <div className="flex-1">
-                                <div className="font-medium">{position.title}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {position.quantity} {position.unit} × €{position.unitPrice.toFixed(2)}
+                        <label className="text-sm font-medium text-muted-foreground">Kunde</label>
+                        <p className="font-medium">{generatedOffer.customer.name}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Positionen</label>
+                        <p className="font-medium">{generatedOffer.positions.length} Stück</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Gesamtsumme</label>
+                        <p className="font-medium text-accent">€{generatedOffer.total.toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    {generatedOffer.marketAnalysis && (
+                      <>
+                        <Separator />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Marktdaten-Abdeckung</label>
+                            <p className="font-medium">
+                              {Math.round(
+                                (generatedOffer.marketAnalysis.positionsAnalyzed /
+                                  generatedOffer.marketAnalysis.totalPositions) *
+                                  100,
+                              )}
+                              %
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Datenqualität</label>
+                            <Badge
+                              variant={
+                                generatedOffer.marketAnalysis.dataQuality === "Hoch"
+                                  ? "default"
+                                  : generatedOffer.marketAnalysis.dataQuality === "Mittel"
+                                    ? "secondary"
+                                    : "outline"
+                              }
+                            >
+                              {generatedOffer.marketAnalysis.dataQuality}
+                            </Badge>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <Button onClick={handleExportOffer} className="w-full">
+                        <Download className="h-4 w-4 mr-2" />
+                        Im Angebots-Builder öffnen
+                      </Button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button variant="outline" size="sm">
+                          <FileText className="h-4 w-4 mr-2" />
+                          PDF Export
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Send className="h-4 w-4 mr-2" />
+                          Versenden
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Angebots-Vorschau</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-96">
+                      <div className="space-y-4 text-sm">
+                        <div>
+                          <h4 className="font-medium mb-2">Einleitung</h4>
+                          <p className="text-muted-foreground whitespace-pre-line">
+                            {generatedOffer.textBlocks.introduction}
+                          </p>
+                        </div>
+
+                        <Separator />
+
+                        <div>
+                          <h4 className="font-medium mb-2">Leistungsverzeichnis</h4>
+                          <div className="space-y-2">
+                            {generatedOffer.positions.slice(0, 3).map((position, index) => (
+                              <div key={position.id} className="flex justify-between items-start p-2 bg-muted rounded">
+                                <div className="flex-1">
+                                  <div className="font-medium">{position.title}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {position.quantity} {position.unit} × €{position.unitPrice.toFixed(2)}
+                                    {position.marketData && (
+                                      <span className="ml-2 text-green-600">
+                                        (Marktbasiert: {Math.round(position.marketData.confidence * 100)}%)
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
+                                <div className="font-medium">€{position.totalPrice.toFixed(2)}</div>
                               </div>
-                              <div className="font-medium">€{position.totalPrice.toFixed(2)}</div>
-                            </div>
-                          ))}
-                          {generatedOffer.positions.length > 3 && (
-                            <div className="text-center text-muted-foreground text-xs">
-                              ... und {generatedOffer.positions.length - 3} weitere Positionen
-                            </div>
-                          )}
+                            ))}
+                            {generatedOffer.positions.length > 3 && (
+                              <div className="text-center text-muted-foreground text-xs">
+                                ... und {generatedOffer.positions.length - 3} weitere Positionen
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between">
+                            <span>Zwischensumme:</span>
+                            <span>€{generatedOffer.subtotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Risikozuschlag ({generatedOffer.riskPercent}%):</span>
+                            <span>€{((generatedOffer.subtotal * generatedOffer.riskPercent) / 100).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between font-bold border-t pt-1">
+                            <span>Gesamtsumme:</span>
+                            <span>€{generatedOffer.total.toFixed(2)}</span>
+                          </div>
                         </div>
                       </div>
-
-                      <Separator />
-
-                      <div className="space-y-1">
-                        <div className="flex justify-between">
-                          <span>Zwischensumme:</span>
-                          <span>€{generatedOffer.subtotal.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Risikozuschlag ({generatedOffer.riskPercent}%):</span>
-                          <span>€{((generatedOffer.subtotal * generatedOffer.riskPercent) / 100).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold border-t pt-1">
-                          <span>Gesamtsumme:</span>
-                          <span>€{generatedOffer.total.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
         </main>
