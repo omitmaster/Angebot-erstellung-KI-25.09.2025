@@ -11,9 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Bell, User, LogOut, Settings } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 
 interface UserProfile {
@@ -24,47 +23,16 @@ interface UserProfile {
 
 export function Header() {
   const router = useRouter()
-  const supabase = createClient()
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const getUserProfile = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-        if (user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("first_name, last_name")
-            .eq("id", user.id)
-            .single()
-
-          setUserProfile({
-            first_name: profile?.first_name,
-            last_name: profile?.last_name,
-            email: user.email,
-          })
-        }
-      } catch (error) {
-        console.error("Error fetching user profile:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    getUserProfile()
-  }, [supabase])
+  const [userProfile] = useState<UserProfile | null>({
+    first_name: "Demo",
+    last_name: "User",
+    email: "demo@example.com",
+  })
+  const [loading] = useState(false)
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-      router.push("/auth/login")
-      router.refresh()
-    } catch (error) {
-      console.error("Error signing out:", error)
-    }
+    router.push("/auth/login")
+    router.refresh()
   }
 
   const displayName =
