@@ -23,7 +23,7 @@ export default function HomePage() {
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
               <Button asChild>
-                <Link href="/demo">Demo</Link>
+                <Link href="/auth/register">Registrieren</Link>
               </Button>
             </div>
           </div>
@@ -48,7 +48,7 @@ export default function HomePage() {
                   <Link href="/dashboard">Jetzt starten</Link>
                 </Button>
                 <Button asChild variant="outline" size="lg" className="text-lg px-8 py-6 bg-transparent">
-                  <Link href="/demo">Demo ansehen</Link>
+                  <Link href="/auth/register">Kostenlos registrieren</Link>
                 </Button>
               </div>
             </div>
