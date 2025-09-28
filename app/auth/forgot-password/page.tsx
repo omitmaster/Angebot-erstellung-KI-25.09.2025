@@ -2,6 +2,7 @@
 
 import type React from "react"
 
+import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,9 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
 import { useState } from "react"
-import { Hammer, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react"
-import { authActions } from "@/lib/auth/hooks"
-import { validateEmail } from "@/lib/auth/security"
+import { Building2, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
@@ -25,11 +24,16 @@ export default function ForgotPasswordPage() {
     setError(null)
 
     try {
-      if (!validateEmail(email)) {
-        throw new Error("Bitte geben Sie eine gültige E-Mail-Adresse ein")
+      const supabase = createClient()
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      })
+
+      if (error) {
+        throw error
       }
 
-      await authActions.resetPassword(email)
       setSuccess(true)
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Ein Fehler ist aufgetreten")
@@ -45,7 +49,7 @@ export default function ForgotPasswordPage() {
           <div className="flex flex-col gap-6">
             <div className="flex flex-col items-center gap-2 mb-4">
               <div className="flex items-center gap-2">
-                <Hammer className="h-8 w-8 text-primary" />
+                <Building2 className="h-8 w-8 text-primary" />
                 <h1 className="text-2xl font-bold text-foreground">HandwerkApp</h1>
               </div>
             </div>
@@ -86,7 +90,7 @@ export default function ForgotPasswordPage() {
         <div className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-2 mb-4">
             <div className="flex items-center gap-2">
-              <Hammer className="h-8 w-8 text-primary" />
+              <Building2 className="h-8 w-8 text-primary" />
               <h1 className="text-2xl font-bold text-foreground">HandwerkApp</h1>
             </div>
           </div>

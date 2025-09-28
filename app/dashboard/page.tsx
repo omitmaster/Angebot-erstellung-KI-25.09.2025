@@ -1,14 +1,47 @@
+"use client"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Inbox, FileText, Calculator, TrendingUp, CheckCircle, FolderOpen, Building2, Home } from "lucide-react"
 import Link from "next/link"
+import { useAuth } from "@/lib/auth/client"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 
 export default function Dashboard() {
-  const displayName = "Demo User"
-  const isHandwerker = true
-  const projectsCount = 3
-  const offersCount = 5
+  const { user, profile, loading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/auth/login")
+    }
+  }, [user, loading, router])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Lädt...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  const displayName =
+    profile?.first_name && profile?.last_name
+      ? `${profile.first_name} ${profile.last_name}`
+      : profile?.first_name || user?.email?.split("@")[0] || "Benutzer"
+
+  const isHandwerker = profile?.role === "handwerker"
+  const projectsCount = 0 // Will be fetched from database later
+  const offersCount = 0 // Will be fetched from database later
 
   return (
     <div className="min-h-screen bg-background">
@@ -79,8 +112,8 @@ export default function Dashboard() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">€12.450</div>
-              <p className="text-xs text-muted-foreground">+15% zum Vormonat</p>
+              <div className="text-2xl font-bold">€0</div>
+              <p className="text-xs text-muted-foreground">Noch keine Daten</p>
             </CardContent>
           </Card>
 
@@ -90,9 +123,9 @@ export default function Dashboard() {
               <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{isHandwerker ? "87%" : "4.8"}</div>
+              <div className="text-2xl font-bold">{isHandwerker ? "0%" : "0"}</div>
               <p className="text-xs text-muted-foreground">
-                {isHandwerker ? "Angenommene Angebote" : "Durchschnittsbewertung"}
+                {isHandwerker ? "Noch keine Angebote" : "Noch keine Bewertungen"}
               </p>
             </CardContent>
           </Card>
@@ -107,21 +140,29 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
-                <Button className="h-20 flex-col gap-2">
-                  <FileText className="h-6 w-6" />
-                  LV-Analyse
+                <Button asChild className="h-20 flex-col gap-2">
+                  <Link href="/lv-analyse">
+                    <FileText className="h-6 w-6" />
+                    LV-Analyse
+                  </Link>
                 </Button>
-                <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-                  <Calculator className="h-6 w-6" />
-                  KI-Angebot
+                <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+                  <Link href="/ai-angebots-generator">
+                    <Calculator className="h-6 w-6" />
+                    KI-Angebot
+                  </Link>
                 </Button>
-                <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-                  <TrendingUp className="h-6 w-6" />
-                  Preisdatenbank
+                <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+                  <Link href="/preisdatenbank">
+                    <TrendingUp className="h-6 w-6" />
+                    Preisdatenbank
+                  </Link>
                 </Button>
-                <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-                  <FolderOpen className="h-6 w-6" />
-                  Dokumente
+                <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+                  <Link href="/documents">
+                    <FolderOpen className="h-6 w-6" />
+                    Dokumente
+                  </Link>
                 </Button>
               </div>
             </CardContent>

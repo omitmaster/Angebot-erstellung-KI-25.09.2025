@@ -12,38 +12,28 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Bell, User, LogOut, Settings } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
 import Link from "next/link"
-
-interface UserProfile {
-  first_name?: string
-  last_name?: string
-  email?: string
-}
+import { useAuth } from "@/lib/auth/client"
 
 export function Header() {
   const router = useRouter()
-  const [userProfile] = useState<UserProfile | null>({
-    first_name: "Demo",
-    last_name: "User",
-    email: "demo@example.com",
-  })
-  const [loading] = useState(false)
+  const { user, profile, loading, signOut } = useAuth()
 
   const handleLogout = async () => {
+    await signOut()
     router.push("/auth/login")
     router.refresh()
   }
 
   const displayName =
-    userProfile?.first_name && userProfile?.last_name
-      ? `${userProfile.first_name} ${userProfile.last_name}`
-      : userProfile?.email?.split("@")[0] || "Benutzer"
+    profile?.first_name && profile?.last_name
+      ? `${profile.first_name} ${profile.last_name}`
+      : profile?.first_name || user?.email?.split("@")[0] || "Benutzer"
 
   const initials =
-    userProfile?.first_name && userProfile?.last_name
-      ? `${userProfile.first_name[0]}${userProfile.last_name[0]}`.toUpperCase()
-      : userProfile?.email?.[0]?.toUpperCase() || "U"
+    profile?.first_name && profile?.last_name
+      ? `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase()
+      : profile?.first_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"
 
   return (
     <header className="sticky top-0 z-50 h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -77,7 +67,7 @@ export function Header() {
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">{loading ? "Lädt..." : displayName}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{loading ? "" : userProfile?.email}</p>
+                  <p className="text-xs leading-none text-muted-foreground">{loading ? "" : user?.email}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
