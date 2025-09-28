@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Building2, Calculator, FileText, Database, Sparkles } from "lucide-react"
+import { HomepageLogin } from "@/components/auth/homepage-login"
 
 export default function HomePage() {
   return (
@@ -31,19 +32,31 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <section className="py-20 px-4">
-        <div className="container mx-auto text-center">
-          <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">Handwerk Business Management System</h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-            Optimieren Sie Ihre Angebotserstellung, Preiskalkulation und Projektabwicklung mit KI-gestützten Tools für
-            das moderne Handwerk.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" className="text-lg px-8 py-6">
-              <Link href="/dashboard">Jetzt starten</Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="text-lg px-8 py-6 bg-transparent">
-              <Link href="/demo">Demo ansehen</Link>
-            </Button>
+        <div className="container mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Left side - Content */}
+            <div className="text-center lg:text-left">
+              <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+                Handwerk Business Management System
+              </h1>
+              <p className="text-xl text-muted-foreground mb-8 max-w-2xl">
+                Optimieren Sie Ihre Angebotserstellung, Preiskalkulation und Projektabwicklung mit KI-gestützten Tools
+                für das moderne Handwerk.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                <Button asChild size="lg" className="text-lg px-8 py-6">
+                  <Link href="/dashboard">Jetzt starten</Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="text-lg px-8 py-6 bg-transparent">
+                  <Link href="/demo">Demo ansehen</Link>
+                </Button>
+              </div>
+            </div>
+
+            {/* Right side - Login */}
+            <div className="flex justify-center lg:justify-end">
+              <HomepageLogin />
+            </div>
           </div>
         </div>
       </section>
